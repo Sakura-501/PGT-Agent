@@ -1,0 +1,19 @@
+[project]
+name = "harbor-ext"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "sakura501", email = "sakura501.top@qq.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "harbor>=0.1.45",
+]
+
+[project.scripts]
+harbor-ext = "harbor_ext:main"
+
+[build-system]
+requires = ["uv_build>=0.9.26,<0.10.0"]
+build-backend = "uv_build"
