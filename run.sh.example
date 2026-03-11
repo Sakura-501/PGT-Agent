@@ -4,15 +4,31 @@
 
 # ========== 配置区域 ==========
 export OPENAI_API_KEY="your-api-key-here"
-# export OPENAI_BASE_URL="https://open.bigmodel.cn/api/paas/v4"  # 可选，默认智谱
+export OPENAI_BASE_URL="https://open.bigmodel.cn/api/paas/v4"
+CONFIG="configs/pgt-agent.yaml"
 # ==============================
 
 cd "$(dirname "$0")"
 
-echo "=== PGT-Agent 运行中 ==="
-echo "配置: PGT-Bench/configs/pgt-agent.yaml"
-echo "数据集: benchmark/tdir-EN-auto-score-algorithm"
+# 从 config 文件中解析关键字段
+CONFIG_PATH="PGT-Bench/${CONFIG}"
+if [ ! -f "$CONFIG_PATH" ]; then
+    echo "错误: 配置文件 $CONFIG_PATH 不存在"
+    exit 1
+fi
+
+MODEL=$(grep 'model_name:' "$CONFIG_PATH" | head -1 | sed 's/.*model_name:\s*//')
+DATASET=$(grep 'path:' "$CONFIG_PATH" | head -1 | sed 's/.*path:\s*//')
+AGENT=$(grep 'import_path:' "$CONFIG_PATH" | head -1 | sed 's/.*import_path:\s*//')
+
+echo "=== PGT-Agent ==="
+echo "配置文件:  ${CONFIG}"
+echo "Agent:     ${AGENT}"
+echo "模型:      ${MODEL}"
+echo "数据集:    ${DATASET}"
+echo "API 端点:  ${OPENAI_BASE_URL:-默认 OpenAI}"
+echo "================="
 echo ""
 
 cd PGT-Bench || exit 1
-harbor run --config configs/pgt-agent.yaml
+harbor run --config "$CONFIG"
