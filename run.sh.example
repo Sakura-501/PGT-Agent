@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# PGT-Agent 运行脚本
+# 使用方法: cp run.sh.example run.sh, 然后填写 API 密钥
+
+# ========== 配置区域 ==========
+export OPENAI_API_KEY="your-api-key-here"
+# export OPENAI_BASE_URL="https://open.bigmodel.cn/api/paas/v4"  # 可选，默认智谱
+# ==============================
+
+cd "$(dirname "$0")"
+
+echo "=== PGT-Agent 运行中 ==="
+echo "配置: PGT-Bench/configs/pgt-agent.yaml"
+echo "数据集: benchmark/tdir-EN-auto-score-algorithm"
+echo ""
+
+cd PGT-Bench || exit 1
+harbor run --config configs/pgt-agent.yaml
