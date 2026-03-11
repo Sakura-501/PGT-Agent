@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from harbor_ext.pgt_agent_impl.helpers import (
+from pgt_agent.pgt_agent_impl.helpers import (
     as_dict,
     as_list,
     edge_time,

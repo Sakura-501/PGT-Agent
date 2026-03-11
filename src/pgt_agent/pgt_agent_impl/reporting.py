@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from harbor_ext.pgt_agent_impl.helpers import (
+from pgt_agent.pgt_agent_impl.helpers import (
     as_dict,
     as_list,
     class_to_mitre,
