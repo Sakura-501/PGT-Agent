@@ -2,6 +2,78 @@
 
 基于 Harbor 框架的溯源图（Provenance Graph）安全分析 Agent，用于自动化分析终端威胁检测与响应（TDR）场景下的攻击链、MITRE 映射和 IOC 提取。
 
+## 快速开始
+
+### 1. 安装 PGT-Agent
+
+```bash
+git clone https://github.com/Sakura-501/PGT-Agent.git
+cd PGT-Agent
+uv pip install -e .
+```
+
+### 2. 克隆 PGT-Bench 基准测试项目
+
+PGT-Agent 需要配合 [PGT-Bench](https://github.com/Sakura-501/PGT-Bench) 使用，后者提供测试数据集和运行配置：
+
+```bash
+git clone https://github.com/Sakura-501/PGT-Bench.git
+cd PGT-Bench
+```
+
+### 3. 配置环境变量
+
+```bash
+export OPENAI_API_KEY="your-api-key"
+export OPENAI_BASE_URL="https://open.bigmodel.cn/api/paas/v4"  # 可选，默认 OpenAI
+```
+
+### 4. 运行
+
+使用 PGT-Bench 中的配置文件运行：
+
+```bash
+cd PGT-Bench
+harbor run --config configs/pgt-agent.yaml
+```
+
+**配置文件说明：**
+
+| 文件 | 说明 |
+|------|------|
+| `configs/pgt-agent.yaml` | PGT-Agent 主配置，使用 `tdir-EN-auto-score-algorithm` 数据集 |
+
+配置文件示例：
+
+```yaml
+agents:
+  - name: pgt-agent
+    import_path: pgt_agent:PGTAgent
+    model_name: glm-4.7
+
+environment:
+  type: docker
+  env:
+    OPENAI_API_KEY: ${OPENAI_API_KEY}
+    OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
+
+datasets:
+  - path: benchmark/tdir-EN-auto-score-algorithm
+```
+
+### 5. 查看输出
+
+运行完成后，在 `jobs/` 目录下查看结果：
+
+```
+jobs/<job-id>/
+├── report.md          # Markdown 格式安全分析报告
+├── report.json        # JSON 格式结构化数据
+└── report.raw.txt     # LLM 原始输出（调试用）
+```
+
+---
+
 ## 架构概览
 
 ```
@@ -119,8 +191,8 @@ src/pgt_agent/
     "nodes": [{"id": "...", "type": "...", "name": "...", "is_alert": false}],
     "edges": [{"from": "...", "to": "...", "class_name": "...", "is_alert": true}]
   },
-  "alert_edge_details": [...],  // 告警边详情（最多 alert_detail_limit 条）
-  "timeline": [...]             // 时间排序的事件流（最多 80 条）
+  "alert_edge_details": [...],
+  "timeline": [...]
 }
 ```
 
@@ -152,11 +224,6 @@ REPORT_SCHEMA
     ├─ date
     └─ sections
         ├─ event_summary          # 事件摘要
-        │   ├─ event_brief
-        │   ├─ threat_level
-        │   ├─ initial_access_method
-        │   ├─ initial_access_evidence
-        │   └─ event_purpose
         ├─ attack_timeline[]      # 攻击时间线
         ├─ attack_graph           # Mermaid 流程图
         └─ future_behavior[]      # 行为预测
@@ -173,21 +240,6 @@ REPORT_SCHEMA
 | `json_to_markdown()` | 正常模式：JSON → 格式化 Markdown |
 | `build_fallback_markdown()` | 降级模式：LLM 输出不可解析时，基于原始图生成基础报告 |
 | `build_error_markdown()` | 错误模式：读取溯源图失败时的错误报告 |
-
-**Markdown 报告结构：**
-
-```markdown
-# {title}
-**生成日期:** {date}
-**机器ID:** {machine_id}
-**事件ID:** {insight_id}
-
-## 1. 事件摘要
-## 2. 攻击时间线
-## 3. 攻击流程图 (Mermaid)
-## 4. 行为预测
-## 附录：入侵指标 (IOCs)
-```
 
 ### 6. parsing.py - LLM 输出解析
 
@@ -240,40 +292,6 @@ REPORT_SCHEMA
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-## 安装与使用
-
-### 安装
-
-```bash
-cd PGT-Agent
-uv pip install -e .
-```
-
-### Harbor 配置
-
-```yaml
-# configs/pgt-agent.yaml
-agents:
-  - name: pgt-agent
-    import_path: pgt_agent:PGTAgent
-    model_name: glm-4.7  # 或其他 OpenAI 兼容模型
-
-environment:
-  type: docker
-  env:
-    OPENAI_API_KEY: ${OPENAI_API_KEY}
-    OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
-
-datasets:
-  - path: benchmark/your-dataset
-```
-
-### 运行
-
-```bash
-harbor run --config configs/pgt-agent.yaml
-```
-
 ## 环境变量
 
 | 变量 | 必需 | 说明 |
@@ -290,6 +308,11 @@ Agent 运行后生成以下文件：
 | Markdown 报告 | `/logs/artifacts/report.md` | 人类可读的安全分析报告 |
 | JSON 报告 | `/logs/artifacts/report.json` | 结构化报告数据 |
 | 原始输出 | `/logs/artifacts/report.raw.txt` | LLM 原始输出（用于调试） |
+
+## 相关项目
+
+- [PGT-Bench](https://github.com/Sakura-501/PGT-Bench) - 溯源图分析基准测试框架
+- [Harbor](https://github.com/anthropics/harbor) - Agent 评估框架
 
 ## 依赖
 
