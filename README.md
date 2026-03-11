@@ -63,7 +63,17 @@ datasets:
 
 ### 5. 查看输出
 
-运行完成后，在 `jobs/` 目录下查看结果：
+运行完成后查看结果：
+
+```bash
+# 使用 Harbor 查看评估结果
+harbor view jobs
+
+# 或直接查看 jobs/ 目录
+ls jobs/
+```
+
+输出文件结构：
 
 ```
 jobs/<job-id>/
