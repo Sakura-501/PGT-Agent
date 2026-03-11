@@ -50,3 +50,18 @@ REPORT_SCHEMA = {
         },
     },
 }
+
+
+# Validation and reflection metadata schemas (added in v0.2.0)
+# These are prefixed with _ to indicate metadata, not part of the report itself
+
+VALIDATION_SCHEMA = {
+    "ok": "bool - True if validation passed",
+    "issues": "list[str] - List of specific validation issues",
+}
+
+REVIEW_SCHEMA = {
+    "verdict": "str - 'pass' or 'fail'",
+    "issues": "list[str] - List of issues found by critic",
+    "reflection": "str - Summary reflection for improvement",
+}

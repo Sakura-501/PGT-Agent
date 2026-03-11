@@ -58,7 +58,9 @@ def prepare_graph_payload(
             "raw_chars": raw_len,
             "compressed_chars": len(compressed_text),
             "edge_count": compressed.get("summary", {}).get("edge_count", 0),
-            "alert_edge_count": compressed.get("summary", {}).get("alert_edge_count", 0),
+            "alert_edge_count": compressed.get("summary", {}).get(
+                "alert_edge_count", 0
+            ),
             "node_count": compressed.get("summary", {}).get("node_count", 0),
         },
         parsed,

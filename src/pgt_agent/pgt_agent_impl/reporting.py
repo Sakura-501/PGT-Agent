@@ -25,7 +25,9 @@ def json_to_markdown(report: dict[str, Any]) -> str:
     event_summary = as_dict(sections.get("event_summary"))
 
     title = text(report_data.get("title")) or "溯源图安全分析报告"
-    date = text(report_data.get("date")) or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    date = text(report_data.get("date")) or datetime.now(timezone.utc).strftime(
+        "%Y-%m-%d"
+    )
     machine_id = text(metadata.get("machine_id")) or "未知"
     insight_id = text(metadata.get("insight_id")) or "未知"
 
@@ -75,7 +77,7 @@ def json_to_markdown(report: dict[str, Any]) -> str:
             attack_graph = f"```mermaid\n{attack_graph}\n```"
         lines.append(attack_graph)
     else:
-        lines.append("```mermaid\ngraph TD\nA[\"未提供流程图\"]\n```")
+        lines.append('```mermaid\ngraph TD\nA["未提供流程图"]\n```')
 
     lines.extend(["", "## 4. 行为预测"])
     future_behavior = as_list(sections.get("future_behavior"))
@@ -253,7 +255,7 @@ def build_error_markdown(title: str, message: str) -> str:
         "- 初始访问证据: 无\n"
         "- 事件目的: 无法分析\n\n"
         "## 2. 攻击时间线\n无时间线数据。\n\n"
-        "## 3. 攻击流程图\n```mermaid\ngraph TD\nA[\"读取失败\"]\n```\n\n"
+        '## 3. 攻击流程图\n```mermaid\ngraph TD\nA["读取失败"]\n```\n\n'
         "## 4. 行为预测\n无后续行为预测。\n\n"
         "## 附录：入侵指标 (IOCs)\n未发现 IOC。\n"
     )
@@ -310,6 +312,11 @@ def _collect_iocs_from_graph(
 
             for file_hash in as_list(file_obj.get("hashes")):
                 row = as_dict(file_hash)
-                add(text(row.get("algorithm")), text(row.get("value")), "文件哈希", risk_level)
+                add(
+                    text(row.get("algorithm")),
+                    text(row.get("value")),
+                    "文件哈希",
+                    risk_level,
+                )
 
     return output

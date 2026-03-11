@@ -236,13 +236,15 @@ memory/
 
 ## 五、迁移检查清单
 
-### 阶段 1（ReAct + Reflection）
+### 阶段 1（ReAct + Reflection）✅ 已完成
 
-- [ ] 创建 `brain/prompts.py` - 迁移 REACT/CRITIC 提示词
-- [ ] 创建 `brain/validator.py` - 报告校验逻辑
-- [ ] 创建 `brain/reflector.py` - Critic 反思逻辑
-- [ ] 修改 `agent.py` - 实现多轮循环
-- [ ] 更新 `schema.py` - 确保 validation/reflection 兼容
+- [x] 创建 `brain/prompts.py` - 迁移 REACT/CRITIC 提示词
+- [x] 创建 `brain/validator.py` - 报告校验逻辑
+- [x] 创建 `brain/reflector.py` - Critic 反思逻辑
+- [x] 修改 `agent.py` - 实现多轮循环
+- [x] 更新 `schema.py` - 确保 validation/reflection 兼容
+- [x] 删除旧的 `pgt_agent_impl/prompting.py`
+- [x] 代码格式化和检查通过
 
 ### 阶段 2（Skills）
 
@@ -285,6 +287,14 @@ ruff check --fix .
 
 ## 八、当前状态
 
-**版本**：0.1.0
-**架构**：单次 LLM 调用
-**下一步**：实现 ReAct + Reflection 循环
+**版本**：0.2.0
+**架构**：ReAct + Reflection 多轮迭代
+**阶段1状态**：✅ 已完成
+
+**已完成功能**：
+- ✅ 多轮 ReAct 循环（max_attempts 可配置）
+- ✅ Critic 反思质量控制
+- ✅ 规则校验器（validate_report）
+- ✅ 环境变量控制（MAX_ATTEMPTS, REFLECTION_ENABLED）
+
+**下一步**：阶段 2 - Skills 工具模块（可选，待定）

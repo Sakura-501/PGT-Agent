@@ -12,15 +12,20 @@ from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
 from harbor.utils.env import resolve_env_vars
 
+from pgt_agent.brain import (
+    REACT_SYSTEM_PROMPT,
+    build_user_prompt,
+    reflect_critic,
+    should_continue_iteration,
+    validate_report,
+)
 from pgt_agent.pgt_agent_impl.graph import prepare_graph_payload
 from pgt_agent.pgt_agent_impl.parsing import extract_report_json
-from pgt_agent.pgt_agent_impl.prompting import build_user_prompt
 from pgt_agent.pgt_agent_impl.reporting import (
     build_error_markdown,
     build_fallback_markdown,
     json_to_markdown,
 )
-from pgt_agent.pgt_agent_impl.schema import REPORT_SCHEMA
 
 
 class PGTAgent(BaseAgent):
@@ -45,6 +50,9 @@ class PGTAgent(BaseAgent):
         prompt_graph_char_limit: int = 180000,
         alert_detail_limit: int = 40,
         extra_env: dict[str, str] | None = None,
+        max_attempts: int = 2,
+        reflection_enabled: bool = True,
+        reflect_model: str | None = None,
         **kwargs,
     ):
         super().__init__(logs_dir=logs_dir, model_name=model_name, **kwargs)
@@ -56,9 +64,12 @@ class PGTAgent(BaseAgent):
         self.prompt_graph_char_limit = prompt_graph_char_limit
         self.alert_detail_limit = alert_detail_limit
         self.extra_env = dict(extra_env or {})
+        self.max_attempts = max_attempts
+        self.reflection_enabled = reflection_enabled
+        self.reflect_model = reflect_model
 
     def version(self) -> str:
-        return "0.1.0"
+        return "0.2.0"  # ReAct + Reflection framework
 
     async def setup(self, environment: BaseEnvironment) -> None:
         await environment.exec(command="mkdir -p /logs/artifacts")
@@ -98,65 +109,102 @@ class PGTAgent(BaseAgent):
             alert_detail_limit=self.alert_detail_limit,
         )
 
-        messages = [
-            {
-                "role": "system",
-                "content": (
-                    "你是一位精通终端威胁检测与响应（TDR）的高级安全专家。"
-                    "你擅长从溯源图中提炼攻击链、MITRE映射、IOC，并输出结构化报告。"
-                ),
-            },
-            {
-                "role": "user",
-                "content": build_user_prompt(
-                    instruction=instruction,
-                    graph_payload=prompt_payload,
-                    mode=mode,
-                    mode_stats=mode_stats,
-                    report_schema=REPORT_SCHEMA,
-                ),
-            },
-        ]
+        # ReAct + Reflection loop
+        client = self._build_openai_client()
+        reflections: list[str] = []
+        max_attempts = int(self._get_env("MAX_ATTEMPTS") or str(self.max_attempts))
+        reflect_enabled = self.reflection_enabled and self._truthy(
+            self._get_env("REFLECTION_ENABLED")
+        )
 
-        model_output = ""
         report_json: dict[str, Any] | None = None
-        usage: dict[str, int] | None = None
+        model_output = ""
+        total_usage: dict[str, int] = {}
+        final_validation: dict[str, Any] = {}
+        final_review: dict[str, Any] = {}
 
-        try:
-            client = self._build_openai_client()
-            model_output, usage = await self._chat_completion(
-                client=client,
-                model_name=self.model_name or "glm-4.7",
-                messages=messages,
+        for attempt in range(max_attempts):
+            self.logger.info(f"Attempt {attempt + 1}/{max_attempts}")
+
+            # Build prompt with historical reflections
+            user_prompt = build_user_prompt(
+                instruction=instruction,
+                graph_payload=prompt_payload,
+                mode=mode,
+                mode_stats=mode_stats,
+                reflections=reflections,
             )
-            report_json = extract_report_json(model_output)
 
-            if report_json is None:
-                fix_messages = messages + [
-                    {"role": "assistant", "content": model_output},
-                    {
-                        "role": "user",
-                        "content": (
-                            "你刚才的输出不是可解析的 JSON。"
-                            "请仅输出符合 schema 的 JSON 对象，"
-                            "不要输出 markdown、不要解释。"
-                        ),
-                    },
-                ]
-                repaired_output, repaired_usage = await self._chat_completion(
+            messages = [
+                {"role": "system", "content": REACT_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ]
+
+            # LLM call
+            try:
+                output, usage = await self._chat_completion(
                     client=client,
                     model_name=self.model_name or "glm-4.7",
-                    messages=fix_messages,
+                    messages=messages,
                 )
-                model_output = repaired_output
-                report_json = extract_report_json(repaired_output)
-                usage = self._merge_usage(usage, repaired_usage)
+                model_output = output
+                if usage:
+                    total_usage = self._merge_usage(total_usage, usage)
 
-        except Exception as exc:  # noqa: BLE001
-            self.logger.exception("LLM call failed: %s", exc)
-            report_json = None
-            model_output = f"[llm_error] {exc}"
+            except Exception as exc:  # noqa: BLE001
+                self.logger.exception("LLM call failed: %s", exc)
+                model_output = f"[llm_error] {exc}"
+                report_json = None
+                break
 
+            # Parse report
+            report_json = extract_report_json(model_output)
+
+            # Validate report
+            final_validation = validate_report(
+                report=report_json,
+                graph=parsed_graph,
+            )
+
+            # Reflection
+            if reflect_enabled and should_continue_iteration(
+                validation=final_validation,
+                review={},
+                current_attempt=attempt,
+                max_attempts=max_attempts,
+            ):
+                reflect_model = self.reflect_model or self.model_name or "glm-4.7"
+                final_review = await reflect_critic(
+                    client=client,
+                    model_name=reflect_model,
+                    report=report_json,
+                    report_raw=model_output,
+                    validation=final_validation,
+                )
+
+                reflection = final_review.get("reflection", "")
+                if reflection:
+                    reflections.append(reflection)
+                    self.logger.info(f"Added reflection: {reflection[:100]}...")
+
+                # Check if should continue
+                if not should_continue_iteration(
+                    validation=final_validation,
+                    review=final_review,
+                    current_attempt=attempt,
+                    max_attempts=max_attempts,
+                ):
+                    self.logger.info(f"Success on attempt {attempt + 1}")
+                    break
+            else:
+                # No reflection, break after validation check
+                if final_validation.get("ok"):
+                    break
+                # If not ok and no more attempts, continue
+                if attempt >= max_attempts - 1:
+                    break
+
+        # Generate final report
         if report_json is not None:
             markdown = json_to_markdown(report_json)
             final_json = report_json
@@ -168,7 +216,20 @@ class PGTAgent(BaseAgent):
                 parsed_graph=parsed_graph,
                 llm_output=model_output,
             )
-            final_json = {"raw_model_output": model_output, "mode": "fallback"}
+            final_json = {
+                "raw_model_output": model_output,
+                "mode": "fallback",
+                "validation": final_validation,
+                "review": final_review,
+            }
+
+        # Add validation and review to final output
+        if final_validation:
+            final_json["_validation"] = final_validation
+        if final_review:
+            final_json["_review"] = final_review
+        if reflections:
+            final_json["_reflections"] = reflections
 
         await self._write_reports(
             environment=environment,
@@ -180,13 +241,21 @@ class PGTAgent(BaseAgent):
         context.metadata = {
             "mode": mode,
             "mode_stats": mode_stats,
+            "attempts": len(reflections) + 1,
+            "validation_ok": final_validation.get("ok", False),
+            "verdict": final_review.get("verdict", "unknown"),
             "report_md_path": self.report_md_path,
             "report_json_path": self.report_json_path,
             "raw_output_path": self.report_raw_path,
         }
-        if usage:
-            context.n_input_tokens = usage.get("prompt_tokens")
-            context.n_output_tokens = usage.get("completion_tokens")
+        if total_usage:
+            context.n_input_tokens = total_usage.get("prompt_tokens")
+            context.n_output_tokens = total_usage.get("completion_tokens")
+
+    def _truthy(self, value: str | None) -> bool:
+        if not value:
+            return False
+        return value.strip().lower() in ("1", "true", "yes", "on")
 
     def _get_env(self, key: str) -> str | None:
         if key in self.extra_env:
@@ -198,7 +267,9 @@ class PGTAgent(BaseAgent):
                     if resolved_value:
                         return resolved_value
                 except Exception:
-                    is_template = value.strip().startswith("${") and value.strip().endswith("}")
+                    is_template = value.strip().startswith(
+                        "${"
+                    ) and value.strip().endswith("}")
                     if value.strip() and not is_template:
                         return value
 
@@ -291,6 +362,12 @@ class PGTAgent(BaseAgent):
         raw_local.write_text(raw_output or "", encoding="utf-8")
 
         await environment.exec(command="mkdir -p /logs/artifacts")
-        await environment.upload_file(source_path=md_local, target_path=self.report_md_path)
-        await environment.upload_file(source_path=json_local, target_path=self.report_json_path)
-        await environment.upload_file(source_path=raw_local, target_path=self.report_raw_path)
+        await environment.upload_file(
+            source_path=md_local, target_path=self.report_md_path
+        )
+        await environment.upload_file(
+            source_path=json_local, target_path=self.report_json_path
+        )
+        await environment.upload_file(
+            source_path=raw_local, target_path=self.report_raw_path
+        )
