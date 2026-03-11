@@ -4,21 +4,27 @@
 
 ## 快速开始
 
-### 1. 安装 PGT-Agent
+### 1. 克隆项目（包含子模块）
+
+```bash
+git clone --recursive https://github.com/Sakura-501/PGT-Agent.git
+cd PGT-Agent
+```
+
+或分步克隆：
 
 ```bash
 git clone https://github.com/Sakura-501/PGT-Agent.git
 cd PGT-Agent
-uv pip install -e .
+git submodule update --init --recursive
 ```
 
-### 2. 克隆 PGT-Bench 基准测试项目
+> PGT-Bench 作为子模块包含在 `PGT-Bench/` 目录中，提供测试数据集和运行配置。
 
-PGT-Agent 需要配合 [PGT-Bench](https://github.com/Sakura-501/PGT-Bench) 使用，后者提供测试数据集和运行配置：
+### 2. 安装 PGT-Agent
 
 ```bash
-git clone https://github.com/Sakura-501/PGT-Bench.git
-cd PGT-Bench
+uv pip install -e .
 ```
 
 ### 3. 配置环境变量
@@ -30,7 +36,7 @@ export OPENAI_BASE_URL="https://open.bigmodel.cn/api/paas/v4"  # 可选，默认
 
 ### 4. 运行
 
-使用 PGT-Bench 中的配置文件运行：
+使用子模块中的配置文件运行：
 
 ```bash
 cd PGT-Bench
